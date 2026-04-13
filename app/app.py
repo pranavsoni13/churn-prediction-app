@@ -9,8 +9,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.data_preprocessing import preprocess_input
 
 # Load model
-model = joblib.load("../models/churn_model.pkl")
-columns = joblib.load("../models/columns.pkl")
+model = joblib.load("models/churn_model.pkl")
+columns = joblib.load("models/columns.pkl")
 
 st.title("Customer Churn Prediction")
 
