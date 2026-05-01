@@ -667,7 +667,7 @@ Recommended:
 * CI/CD configuration
 * Production-grade deployment architecture
 
-🙌 Author
+## 🙌 Author
 Pranav Soni AI & Data Science Student
 
-⭐ If you like this project, consider giving it a star!
+#⭐ If you like this project, consider giving it a star!
