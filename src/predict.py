@@ -1,23 +1,29 @@
+from pathlib import Path
+
 import joblib
 import pandas as pd
+
 from data_preprocessing import preprocess_input
 
-# Load model & columns
-model = joblib.load("../models/churn_model.pkl")
-columns = joblib.load("../models/columns.pkl")
+ROOT = Path(__file__).resolve().parents[1]
+MODEL_PATH = ROOT / "models" / "churn_model.pkl"
+COLUMNS_PATH = ROOT / "models" / "columns.pkl"
+DEFAULT_THRESHOLD = 0.30
 
-def predict(data_dict):
+model = joblib.load(MODEL_PATH)
+columns = joblib.load(COLUMNS_PATH)
+
+
+def predict(data_dict, threshold=DEFAULT_THRESHOLD):
     df = pd.DataFrame([data_dict])
-
     df = preprocess_input(df, columns)
 
-    prediction = model.predict(df)[0]
-    probability = model.predict_proba(df)[0][1]
+    probability = float(model.predict_proba(df)[0][1])
+    prediction = int(probability >= threshold)
 
     return prediction, probability
 
 
-# TEST
 if __name__ == "__main__":
     sample = {
         "gender": "Male",
@@ -38,10 +44,9 @@ if __name__ == "__main__":
         "PaperlessBilling": "Yes",
         "PaymentMethod": "Electronic check",
         "MonthlyCharges": 70,
-        "TotalCharges": 70
+        "TotalCharges": 70,
     }
 
     pred, prob = predict(sample)
-
     print("Prediction:", pred)
     print("Churn Probability:", prob)
