@@ -20,3 +20,4 @@ Thumbs.db
 
 # Data (optional if large)
 data/
+.streamlit_users.json
