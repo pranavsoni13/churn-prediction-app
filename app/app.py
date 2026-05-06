@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -13,8 +15,18 @@ from src.data_preprocessing import preprocess_input
 APP_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = APP_ROOT / "models" / "churn_model.pkl"
 COLUMNS_PATH = APP_ROOT / "models" / "columns.pkl"
+USER_STORE_PATH = APP_ROOT / ".streamlit_users.json"
 THRESHOLD = 0.30
 MODEL_NAME = "Random Forest"
+MODEL_ACCURACY = "77.1%"
+MODEL_ROC_AUC = "83.5%"
+
+st.set_page_config(
+    page_title="Customer Churn Prediction System",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 @st.cache_resource
@@ -26,13 +38,6 @@ def load_artifacts():
 
 
 model, columns = load_artifacts()
-
-st.set_page_config(
-    page_title="Customer Churn Prediction System",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 st.markdown(
     """
@@ -66,33 +71,25 @@ st.markdown(
         font-size: 1.45rem;
         font-weight: 800;
         letter-spacing: .03em;
-        margin: .2rem 0 1.9rem;
+        margin: .2rem 0 1.25rem;
     }
-    .nav-card {
-        background: var(--primary);
+    .login-status {
+        background: #172554;
+        border: 1px solid #1d4ed8;
+        color: #bfdbfe;
         border-radius: 8px;
         padding: .85rem 1rem;
         margin-bottom: 1.1rem;
-        color: white;
-        font-size: 1.03rem;
-    }
-    .nav-muted {
-        color: var(--muted);
-        font-size: 1rem;
-        padding: .55rem 1rem;
-        margin: .25rem 0;
+        text-align: center;
     }
     .sidebar-status {
-        position: fixed;
-        bottom: 1.4rem;
-        width: 18rem;
-        max-width: calc(100% - 2rem);
         background: #21446f;
         color: #60a5fa;
         border-radius: 8px;
-        padding: 1.45rem 1rem;
+        padding: 1.25rem 1rem;
         text-align: center;
         line-height: 1.8;
+        margin-top: 1.2rem;
     }
     .sidebar-status strong { color: #10b981; }
 
@@ -107,13 +104,25 @@ st.markdown(
         text-align: center;
         color: var(--muted);
         font-size: 1.1rem;
-        margin-bottom: .2rem;
+        margin-bottom: .9rem;
     }
     .section-title {
         font-size: 1.35rem;
         font-weight: 800;
         margin: .65rem 0 .8rem;
         color: #f1f5f9;
+    }
+
+    div[data-testid="stRadio"] label { color: var(--muted) !important; }
+    div[role="radiogroup"] label {
+        background: transparent;
+        border-radius: 8px;
+        padding: .35rem .45rem;
+        margin: .12rem 0;
+    }
+    div[role="radiogroup"] label:has(input:checked) {
+        background: var(--primary);
+        color: white !important;
     }
 
     div[data-testid="stTextInput"] label, div[data-testid="stNumberInput"] label,
@@ -159,16 +168,17 @@ st.markdown(
 
     div.stButton > button {
         width: 100%;
-        min-height: 4.7rem;
+        min-height: 3.4rem;
         border: none;
         border-radius: 8px;
         background: var(--primary);
         color: white;
-        font-size: 1.35rem;
-        font-weight: 850;
+        font-size: 1.05rem;
+        font-weight: 800;
         letter-spacing: .01em;
     }
     div.stButton > button:hover { background: #7476ff; color: white; border: none; }
+    .predict-button div.stButton > button { min-height: 4.7rem; font-size: 1.35rem; }
 
     .result-banner {
         border-radius: 8px;
@@ -185,11 +195,11 @@ st.markdown(
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
-        min-height: 9.3rem;
+        min-height: 8.2rem;
     }
     .metric-label { color: var(--muted); font-size: 1.08rem; margin-bottom: 1rem; }
     .metric-value { text-align: center; font-size: 1.45rem; font-weight: 850; margin-top: .8rem; }
-    .prob-panel {
+    .prob-panel, .content-card {
         background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -222,12 +232,32 @@ st.markdown(
 )
 
 
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+
 def yes_no(value: bool) -> str:
     return "Yes" if value else "No"
 
 
 def pct(value: float) -> str:
     return f"{value * 100:.1f}%"
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def load_users() -> dict:
+    if not USER_STORE_PATH.exists():
+        return {}
+    return json.loads(USER_STORE_PATH.read_text())
+
+
+def save_users(users: dict) -> None:
+    USER_STORE_PATH.write_text(json.dumps(users, indent=2, sort_keys=True))
 
 
 def model_probability(customer_data: dict) -> tuple[int, float, pd.DataFrame]:
@@ -315,37 +345,48 @@ def render_bar_rows(rows: list[tuple[str, int, str]]):
         )
 
 
-with st.sidebar:
-    st.markdown('<div class="brand-card">⚡ CCPS</div>', unsafe_allow_html=True)
-    st.markdown('<div class="nav-card">📊 Prediction<br><span style="padding-left:3.2rem;">👤 Customer Input</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="nav-muted">📈 Feature Importance</div>', unsafe_allow_html=True)
-    st.markdown('<div class="nav-muted">🧠 Model Info</div>', unsafe_allow_html=True)
-    st.markdown('<div class="nav-muted">📄 Documentation</div>', unsafe_allow_html=True)
+def render_metric_card(label: str, value: str, color: str):
     st.markdown(
-        f'<div class="sidebar-status">Model: {MODEL_NAME}<br><strong>Threshold: {THRESHOLD:.2f}</strong></div>',
+        f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value" style="color:{color};">{value}</div></div>',
         unsafe_allow_html=True,
     )
 
-st.markdown('<div class="page-title">Customer Churn Prediction System</div>', unsafe_allow_html=True)
-st.markdown('<div class="page-subtitle">Enter customer details to predict churn probability</div>', unsafe_allow_html=True)
 
-left, right = st.columns([1.05, 1], gap="large")
+def render_feature_importance():
+    st.markdown('<div class="section-title">📈 Feature Importance (Random Forest — Gini Impurity Reduction)</div>', unsafe_allow_html=True)
+    palette = ["#6366f1", "#8b5cf6", "#a78bfa", "#0ea5e9", "#38bdf8", "#10b981", "#34d399", "#6ee7b7"]
+    top = aggregate_feature_importance()[:8]
+    max_value = top[0][1] if top else 1
+    rows = []
+    for idx, (label, value) in enumerate(top):
+        normalized = max(3, int(value / max_value * 94))
+        rows.append((label, normalized, palette[idx % len(palette)]))
+    render_bar_rows(rows)
 
-with left:
-    tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=24, step=1)
-    monthly_charges = st.number_input("Monthly Charges ($)", min_value=0.0, max_value=200.0, value=65.50, step=0.5, format="%.2f")
-    suggested_total = round(float(tenure) * float(monthly_charges), 2)
-    total_charges = st.number_input("Total Charges ($)", min_value=0.0, max_value=10000.0, value=suggested_total, step=10.0, format="%.2f")
-    contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-    internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
-    payment_method = st.selectbox(
-        "Payment Method",
-        ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"],
-    )
 
-with right:
-    c1, c2 = st.columns([1.25, .75])
-    with c1:
+def render_prediction_page():
+    st.markdown('<div class="page-title">Customer Churn Prediction System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Enter customer details to predict churn probability</div>', unsafe_allow_html=True)
+
+    if not st.session_state.authenticated:
+        st.warning("Please login or create an account from the sidebar before running a prediction.")
+        return
+
+    left, right = st.columns([1.05, 1], gap="large")
+
+    with left:
+        tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=24, step=1)
+        monthly_charges = st.number_input("Monthly Charges ($)", min_value=0.0, max_value=200.0, value=65.50, step=0.5, format="%.2f")
+        suggested_total = round(float(tenure) * float(monthly_charges), 2)
+        total_charges = st.number_input("Total Charges ($)", min_value=0.0, max_value=10000.0, value=suggested_total, step=10.0, format="%.2f")
+        contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
+        internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
+        payment_method = st.selectbox(
+            "Payment Method",
+            ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"],
+        )
+
+    with right:
         st.write("")
         senior_citizen = st.checkbox("Senior Citizen", value=False)
         partner = st.checkbox("Partner", value=True)
@@ -356,40 +397,47 @@ with right:
         streaming_tv = st.checkbox("Streaming TV", value=True, disabled=internet_service == "No")
         paperless_billing = st.checkbox("Paperless Billing", value=True)
 
-with st.expander("Advanced customer options", expanded=False):
-    adv1, adv2, adv3 = st.columns(3)
-    with adv1:
-        gender = st.selectbox("Gender", ["Male", "Female"])
-        multiple_lines = st.selectbox("Multiple Lines", ["No", "Yes", "No phone service"] if phone_service else ["No phone service"])
-    with adv2:
-        online_backup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"] if internet_service != "No" else ["No internet service"])
-        device_protection = st.selectbox("Device Protection", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
-    with adv3:
-        streaming_movies = st.selectbox("Streaming Movies", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
+    with st.expander("Advanced customer options", expanded=False):
+        adv1, adv2, adv3 = st.columns(3)
+        with adv1:
+            gender = st.selectbox("Gender", ["Male", "Female"])
+            multiple_lines = st.selectbox("Multiple Lines", ["No", "Yes", "No phone service"] if phone_service else ["No phone service"])
+        with adv2:
+            online_backup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"] if internet_service != "No" else ["No internet service"])
+            device_protection = st.selectbox("Device Protection", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
+        with adv3:
+            streaming_movies = st.selectbox("Streaming Movies", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
 
-customer_data = {
-    "gender": gender,
-    "SeniorCitizen": int(senior_citizen),
-    "Partner": yes_no(partner),
-    "Dependents": yes_no(dependents),
-    "tenure": int(tenure),
-    "PhoneService": yes_no(phone_service),
-    "MultipleLines": multiple_lines,
-    "InternetService": internet_service,
-    "OnlineSecurity": yes_no(online_security) if internet_service != "No" else "No internet service",
-    "OnlineBackup": online_backup,
-    "DeviceProtection": device_protection,
-    "TechSupport": yes_no(tech_support) if internet_service != "No" else "No internet service",
-    "StreamingTV": yes_no(streaming_tv) if internet_service != "No" else "No internet service",
-    "StreamingMovies": streaming_movies,
-    "Contract": contract,
-    "PaperlessBilling": yes_no(paperless_billing),
-    "PaymentMethod": payment_method,
-    "MonthlyCharges": float(monthly_charges),
-    "TotalCharges": float(total_charges),
-}
+    customer_data = {
+        "gender": gender,
+        "SeniorCitizen": int(senior_citizen),
+        "Partner": yes_no(partner),
+        "Dependents": yes_no(dependents),
+        "tenure": int(tenure),
+        "PhoneService": yes_no(phone_service),
+        "MultipleLines": multiple_lines,
+        "InternetService": internet_service,
+        "OnlineSecurity": yes_no(online_security) if internet_service != "No" else "No internet service",
+        "OnlineBackup": online_backup,
+        "DeviceProtection": device_protection,
+        "TechSupport": yes_no(tech_support) if internet_service != "No" else "No internet service",
+        "StreamingTV": yes_no(streaming_tv) if internet_service != "No" else "No internet service",
+        "StreamingMovies": streaming_movies,
+        "Contract": contract,
+        "PaperlessBilling": yes_no(paperless_billing),
+        "PaymentMethod": payment_method,
+        "MonthlyCharges": float(monthly_charges),
+        "TotalCharges": float(total_charges),
+    }
 
-if st.button("🔮  Predict Churn Probability"):
+    st.markdown('<div class="predict-button">', unsafe_allow_html=True)
+    submitted = st.button("🔮  Predict Churn Probability")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if not submitted:
+        st.caption("Prediction results will appear here after you submit the customer profile.")
+        return
+
     prediction, probability, _ = model_probability(customer_data)
     churn = prediction == 1
 
@@ -412,10 +460,7 @@ if st.button("🔮  Predict Churn Probability"):
         ]
         for card, (label, value, color) in zip(cards, card_values):
             with card:
-                st.markdown(
-                    f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value" style="color:{color};">{value}</div></div>',
-                    unsafe_allow_html=True,
-                )
+                render_metric_card(label, value, color)
         st.markdown('<div class="risk-title">Top Churn Risk Factors Identified:</div>', unsafe_allow_html=True)
         factors = active_risk_factors(customer_data) or [("Model probability above churn threshold", int(probability * 100), "#ef4444")]
         render_bar_rows(factors)
@@ -429,14 +474,121 @@ if st.button("🔮  Predict Churn Probability"):
             unsafe_allow_html=True,
         )
     else:
-        st.markdown('<div class="section-title">📊 Feature Importance (Random Forest — Gini Impurity Reduction)</div>', unsafe_allow_html=True)
-        importance_rows = []
-        palette = ["#6366f1", "#8b5cf6", "#a78bfa", "#0ea5e9", "#38bdf8", "#10b981", "#34d399", "#6ee7b7"]
-        top = aggregate_feature_importance()[:8]
-        max_value = top[0][1] if top else 1
-        for idx, (label, value) in enumerate(top):
-            normalized = max(3, int(value / max_value * 94))
-            importance_rows.append((label, normalized, palette[idx % len(palette)]))
-        render_bar_rows(importance_rows)
+        render_feature_importance()
+
+
+def render_model_info_page():
+    st.markdown('<div class="page-title">Model Info</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Current trained model, cutoff, and evaluation summary</div>', unsafe_allow_html=True)
+    cards = st.columns(4)
+    values = [
+        ("Model", MODEL_NAME, "#10b981"),
+        ("Threshold", f"{THRESHOLD:.2f}", "#818cf8"),
+        ("Accuracy", MODEL_ACCURACY, "#38bdf8"),
+        ("ROC AUC", MODEL_ROC_AUC, "#f59e0b"),
+    ]
+    for card, (label, value, color) in zip(cards, values):
+        with card:
+            render_metric_card(label, value, color)
+    st.markdown(
+        """
+        <div class="content-card">
+            <h3>How this model is used</h3>
+            <p>The app preprocesses the submitted customer profile, aligns it to the training columns, and uses the Random Forest model to estimate churn probability.</p>
+            <p>If the churn probability is greater than or equal to 0.30, the customer is flagged for retention action.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_documentation_page():
+    st.markdown('<div class="page-title">Documentation</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="content-card">
+            <h3>Workflow</h3>
+            <ol>
+                <li>Create or login to a demo account.</li>
+                <li>Open Prediction and enter customer details.</li>
+                <li>Click Predict Churn Probability.</li>
+                <li>Review probability, risk factors, and retention recommendation.</li>
+            </ol>
+            <h3>Retraining</h3>
+            <p>Place the IBM Telco Customer Churn CSV at <code>data/WA_Fn-UseC_-Telco-Customer-Churn.csv</code>, then run <code>python src/train_model.py</code>.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_auth_page():
+    st.markdown('<div class="page-title">Login / Sign Up</div>', unsafe_allow_html=True)
+    login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
+
+    with login_tab:
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+        if st.button("Login", key="login_button"):
+            users = load_users()
+            if username in users and users[username] == hash_password(password):
+                st.session_state.authenticated = True
+                st.session_state.username = username
+                st.success(f"Welcome back, {username}!")
+            else:
+                st.error("Invalid username or password.")
+
+    with signup_tab:
+        new_username = st.text_input("Choose Username", key="signup_username")
+        new_password = st.text_input("Choose Password", type="password", key="signup_password")
+        confirm_password = st.text_input("Confirm Password", type="password", key="signup_confirm")
+        if st.button("Create Account", key="signup_button"):
+            users = load_users()
+            if not new_username.strip():
+                st.error("Username is required.")
+            elif len(new_password) < 6:
+                st.error("Password must be at least 6 characters.")
+            elif new_password != confirm_password:
+                st.error("Passwords do not match.")
+            elif new_username in users:
+                st.error("This username already exists.")
+            else:
+                users[new_username] = hash_password(new_password)
+                save_users(users)
+                st.session_state.authenticated = True
+                st.session_state.username = new_username
+                st.success(f"Account created. You are logged in as {new_username}.")
+
+    if st.session_state.authenticated:
+        if st.button("Logout"):
+            st.session_state.authenticated = False
+            st.session_state.username = ""
+            st.success("You have been logged out.")
+
+
+with st.sidebar:
+    st.markdown('<div class="brand-card">⚡ CCPS</div>', unsafe_allow_html=True)
+    status = f"Logged in as <strong>{st.session_state.username}</strong>" if st.session_state.authenticated else "Not logged in"
+    st.markdown(f'<div class="login-status">{status}</div>', unsafe_allow_html=True)
+    page = st.radio(
+        "Navigation",
+        ["📊 Prediction", "📈 Feature Importance", "🧠 Model Info", "📄 Documentation", "🔐 Login / Sign Up"],
+        label_visibility="collapsed",
+    )
+    st.markdown(
+        f'<div class="sidebar-status">Model: {MODEL_NAME}<br><strong>Threshold: {THRESHOLD:.2f}</strong></div>',
+        unsafe_allow_html=True,
+    )
+
+if page == "📊 Prediction":
+    render_prediction_page()
+elif page == "📈 Feature Importance":
+    st.markdown('<div class="page-title">Feature Importance</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Global model drivers from the trained Random Forest</div>', unsafe_allow_html=True)
+    render_feature_importance()
+elif page == "🧠 Model Info":
+    render_model_info_page()
+elif page == "📄 Documentation":
+    render_documentation_page()
 else:
-    st.caption("Prediction results will appear here after you submit the customer profile.")
+    render_auth_page()
