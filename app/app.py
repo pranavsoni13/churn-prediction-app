@@ -513,22 +513,83 @@ def render_model_info_page():
 
 def render_documentation_page():
     st.markdown('<div class="page-title">Documentation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">How to use, understand, and retrain the churn prediction system</div>', unsafe_allow_html=True)
+
+    overview_col, workflow_col = st.columns(2, gap="large")
+    with overview_col:
+        st.markdown(
+            """
+            <div class="content-card">
+                <h3>📌 Project Overview</h3>
+                <p><strong>CCPS</strong> predicts whether a telecom customer is likely to churn using customer profile, service, contract, billing, and charge information.</p>
+                <ul>
+                    <li><strong>Model:</strong> Random Forest classifier</li>
+                    <li><strong>Churn cutoff:</strong> 0.30 probability</li>
+                    <li><strong>Output:</strong> churn probability, prediction label, risk factors, and retention recommendation</li>
+                    <li><strong>Authentication:</strong> local demo login/sign-up for app access</li>
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with workflow_col:
+        st.markdown(
+            """
+            <div class="content-card">
+                <h3>🧭 App Workflow</h3>
+                <ol>
+                    <li>Open <strong>Login / Sign Up</strong> and create a demo account.</li>
+                    <li>Go to <strong>Prediction</strong>.</li>
+                    <li>Enter tenure, charges, contract, service, and billing details.</li>
+                    <li>Click <strong>Predict Churn Probability</strong>.</li>
+                    <li>Review probability, churn flag, top risk factors, and recommendation.</li>
+                </ol>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     st.markdown(
         """
         <div class="content-card">
-            <h3>Workflow</h3>
-            <ol>
-                <li>Create or login to a demo account.</li>
-                <li>Open Prediction and enter customer details.</li>
-                <li>Click Predict Churn Probability.</li>
-                <li>Review probability, risk factors, and retention recommendation.</li>
-            </ol>
-            <h3>Retraining</h3>
-            <p>Place the IBM Telco Customer Churn CSV at <code>data/WA_Fn-UseC_-Telco-Customer-Churn.csv</code>, then run <code>python src/train_model.py</code>.</p>
+            <h3>🧾 Input Field Guide</h3>
+            <ul>
+                <li><strong>Tenure:</strong> Number of months the customer has stayed with the company.</li>
+                <li><strong>Monthly Charges:</strong> Customer's current monthly bill amount.</li>
+                <li><strong>Total Charges:</strong> Total amount billed over the full customer lifetime.</li>
+                <li><strong>Contract Type:</strong> Month-to-month customers usually have higher churn risk than one-year or two-year customers.</li>
+                <li><strong>Internet Service:</strong> DSL, fiber optic, or no internet service.</li>
+                <li><strong>Payment Method:</strong> Electronic check often appears as a high-risk churn signal in this dataset.</li>
+                <li><strong>Service toggles:</strong> Online Security, Tech Support, Streaming TV, Paperless Billing, and other features help the model understand the customer profile.</li>
+            </ul>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    metric_col, threshold_col, retrain_col = st.columns(3, gap="large")
+    with metric_col:
+        render_metric_card("Model", MODEL_NAME, "#10b981")
+    with threshold_col:
+        render_metric_card("Threshold", f"{THRESHOLD:.2f}", "#818cf8")
+    with retrain_col:
+        render_metric_card("ROC AUC", MODEL_ROC_AUC, "#f59e0b")
+
+    st.markdown(
+        """
+        <div class="content-card">
+            <h3>🔁 Retraining Instructions</h3>
+            <p>To retrain the model, place the IBM Telco Customer Churn dataset at:</p>
+            <p><code>data/WA_Fn-UseC_-Telco-Customer-Churn.csv</code></p>
+            <p>Then run:</p>
+            <p><code>python src/train_model.py</code></p>
+            <p>The script will preprocess the data, train the Random Forest model, print evaluation metrics, and save refreshed artifacts to <code>models/churn_model.pkl</code> and <code>models/columns.pkl</code>.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.info("Tip: If Prediction shows a login warning, open Login / Sign Up first, create an account, then return to Prediction.")
 
 
 def render_auth_page():
