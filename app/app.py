@@ -92,6 +92,15 @@ st.markdown(
         margin-top: 1.2rem;
     }
     .sidebar-status strong { color: #10b981; }
+    .side-note {
+        color: var(--muted);
+        font-size: .9rem;
+        text-align: center;
+        margin: .7rem 0 1rem;
+    }
+    .main-panel {
+        padding: .6rem 1.1rem 1rem;
+    }
 
     h1, h2, h3 { color: #f8fafc !important; }
     .page-title {
@@ -566,29 +575,48 @@ def render_auth_page():
             st.success("You have been logged out.")
 
 
-with st.sidebar:
+NAV_ITEMS = ["📊 Prediction", "📈 Feature Importance", "🧠 Model Info", "📄 Documentation", "🔐 Login / Sign Up"]
+
+
+def render_navigation_panel() -> str:
     st.markdown('<div class="brand-card">⚡ CCPS</div>', unsafe_allow_html=True)
     status = f"Logged in as <strong>{st.session_state.username}</strong>" if st.session_state.authenticated else "Not logged in"
     st.markdown(f'<div class="login-status">{status}</div>', unsafe_allow_html=True)
-    page = st.radio(
+    default_index = 0 if st.session_state.authenticated else 4
+    selected_page = st.radio(
         "Navigation",
-        ["📊 Prediction", "📈 Feature Importance", "🧠 Model Info", "📄 Documentation", "🔐 Login / Sign Up"],
-        label_visibility="collapsed",
+        NAV_ITEMS,
+        index=default_index,
     )
     st.markdown(
         f'<div class="sidebar-status">Model: {MODEL_NAME}<br><strong>Threshold: {THRESHOLD:.2f}</strong></div>',
         unsafe_allow_html=True,
     )
+    st.markdown('<div class="side-note">Use the menu above to move between prediction, model details, docs, and account pages.</div>', unsafe_allow_html=True)
+    return selected_page
 
-if page == "📊 Prediction":
-    render_prediction_page()
-elif page == "📈 Feature Importance":
-    st.markdown('<div class="page-title">Feature Importance</div>', unsafe_allow_html=True)
-    st.markdown('<div class="page-subtitle">Global model drivers from the trained Random Forest</div>', unsafe_allow_html=True)
-    render_feature_importance()
-elif page == "🧠 Model Info":
-    render_model_info_page()
-elif page == "📄 Documentation":
-    render_documentation_page()
-else:
-    render_auth_page()
+
+def render_selected_page(page: str) -> None:
+    st.markdown('<div class="main-panel">', unsafe_allow_html=True)
+    if page == "📊 Prediction":
+        render_prediction_page()
+    elif page == "📈 Feature Importance":
+        st.markdown('<div class="page-title">Feature Importance</div>', unsafe_allow_html=True)
+        st.markdown('<div class="page-subtitle">Global model drivers from the trained Random Forest</div>', unsafe_allow_html=True)
+        render_feature_importance()
+    elif page == "🧠 Model Info":
+        render_model_info_page()
+    elif page == "📄 Documentation":
+        render_documentation_page()
+    else:
+        render_auth_page()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+nav_column, content_column = st.columns([0.26, 0.74], gap="large")
+
+with nav_column:
+    page = render_navigation_panel()
+
+with content_column:
+    render_selected_page(page)
