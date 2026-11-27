@@ -99,6 +99,15 @@ st.markdown(
     .prob-panel, .content-card { background: #121e33; border: 1px solid #293953; border-radius: 14px; }
     .result-banner { border-radius: 14px; }
     @media (max-width: 900px) { .block-container { padding-left: 1rem; padding-right: 1rem; } .section-heading { align-items: start; flex-direction: column; } .section-hint { display: none; } }
+    .app-topbar { display:flex; align-items:end; justify-content:space-between; gap:1rem; padding:.2rem 0 .8rem; border-bottom:1px solid #26344d; margin-bottom:.75rem; }
+    .app-topbar h2 { margin:.2rem 0 0; font-size:1.45rem; }
+    .topbar-hint { color:#94a3b8; font-size:.82rem; text-align:right; }
+    div[data-testid="stRadio"] div[role="radiogroup"] { gap:.4rem; flex-wrap:wrap; }
+    div[data-testid="stRadio"] div[role="radiogroup"] label { border:1px solid #34445f; border-radius:10px; padding:.5rem .8rem; background:#121e33; transition:all .15s ease; }
+    div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) { border-color:#818cf8; background:#3730a3; }
+    [data-testid="stSidebar"] div[role="radiogroup"] { flex-direction:column; align-items:stretch; }
+    [data-testid="stSidebar"] div[role="radiogroup"] label { width:100%; }
+    @media (max-width: 900px) { .app-topbar { align-items:start; flex-direction:column; } .topbar-hint { text-align:left; } }
     [data-testid="stSidebar"] { background: #1d293b; border-right: 1px solid #24324a; }
     [data-testid="stSidebar"] > div:first-child { padding-top: 1rem; }
     [data-testid="stHeader"] { background: transparent; }
@@ -576,7 +585,7 @@ def render_model_info_page():
         <div class="content-card">
             <h3>How this model is used</h3>
             <p>The app preprocesses the submitted customer profile, aligns it to the training columns, and uses the Random Forest model to estimate churn probability.</p>
-            <p>If the churn probability is greater than or equal to 0.30, the customer is flagged for retention action.</p>
+            <p>If the churn probability is greater than or equal to the active model threshold ({current_threshold():.2f}), the customer is flagged for retention action.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -746,21 +755,36 @@ def render_auth_page():
 NAV_ITEMS = ["📊 Prediction", "🗂️ Prediction History", "📈 Feature Importance", "🧠 Model Info", "📄 Documentation", "🔐 Login / Sign Up"]
 
 
+def sync_sidebar_navigation() -> None:
+    selected = st.session_state.get("sidebar_page", NAV_ITEMS[0])
+    st.session_state["active_page"] = selected
+    st.session_state["top_page"] = selected
+
+
+def sync_top_navigation() -> None:
+    selected = st.session_state.get("top_page", NAV_ITEMS[0])
+    st.session_state["active_page"] = selected
+    st.session_state["sidebar_page"] = selected
+
+
 def render_navigation_panel() -> str:
     st.markdown('<div class="brand-card">⚡ CCPS</div>', unsafe_allow_html=True)
     status = f"Logged in as <strong>{st.session_state.username}</strong>" if st.session_state.authenticated else "Not logged in"
     st.markdown(f'<div class="login-status">{status}</div>', unsafe_allow_html=True)
-    default_index = 0 if st.session_state.authenticated else 5
     selected_page = st.radio(
         "Navigation",
         NAV_ITEMS,
-        index=default_index,
+        key="sidebar_page",
+        on_change=sync_sidebar_navigation,
     )
     st.markdown(
         f'<div class="sidebar-status">Model: {MODEL_NAME}<br><strong>Threshold: {current_threshold():.2f}</strong></div>',
         unsafe_allow_html=True,
     )
-    st.markdown('<div class="side-note">Use the menu above to move between prediction, model details, docs, and account pages.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="side-note">Collapse this panel with the arrow at the top-left. All pages remain available in the main navigation.</div>',
+        unsafe_allow_html=True,
+    )
     return selected_page
 
 
@@ -783,7 +807,28 @@ def render_selected_page(page: str) -> None:
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-with st.sidebar:
-    page = render_navigation_panel()
+default_page = NAV_ITEMS[0] if st.session_state.authenticated else NAV_ITEMS[-1]
+if "active_page" not in st.session_state:
+    st.session_state["active_page"] = default_page
+if "sidebar_page" not in st.session_state:
+    st.session_state["sidebar_page"] = default_page
+if "top_page" not in st.session_state:
+    st.session_state["top_page"] = default_page
 
+with st.sidebar:
+    render_navigation_panel()
+
+st.markdown(
+    '<div class="app-topbar"><div><div class="eyebrow">CCPS / CUSTOMER INTELLIGENCE</div><h2>Workspace</h2></div><div class="topbar-hint">Use the menu here or the left sidebar. Collapsing the sidebar never hides a feature.</div></div>',
+    unsafe_allow_html=True,
+)
+st.radio(
+    "Quick navigation",
+    NAV_ITEMS,
+    key="top_page",
+    horizontal=True,
+    on_change=sync_top_navigation,
+    label_visibility="collapsed",
+)
+page = st.session_state.get("active_page", default_page)
 render_selected_page(page)
