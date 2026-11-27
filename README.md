@@ -1,82 +1,127 @@
 # Customer Churn Prediction
 
-An end-to-end machine-learning application for estimating customer churn risk using the IBM Telco Customer Churn dataset. The project includes a Streamlit interface, reusable preprocessing, model training, threshold selection, evaluation artifacts, and automated checks.
+An end-to-end churn analytics application with a Streamlit dashboard, FastAPI inference service, SQLAlchemy persistence, and a reusable scikit-learn model workflow.
 
-## Current stack
+## Architecture
 
-- Python 3.11
-- Streamlit
-- Pandas / NumPy
-- Scikit-learn
-- Joblib
-- GitHub Actions
+- **Streamlit**: interactive dashboard. Deploy on Streamlit Community Cloud.
+- **FastAPI**: REST inference API and prediction history. Deploy separately, for example on Render.
+- **ML package**: shared preprocessing, training, threshold selection, and inference.
+- **Database**: SQLAlchemy supports PostgreSQL in production and SQLite for local development.
+- **CI**: GitHub Actions compiles the app/backend and runs unit tests.
 
-## Project layout
+## Repository layout
 
 ```text
-app/                    Streamlit application
+app/                    Streamlit dashboard
+backend/
+  main.py               FastAPI routes and service authentication
+  database.py           SQLAlchemy engine and prediction history
+  schemas.py            Pydantic input/output validation
 src/
-  data_preprocessing.py Shared feature cleaning and encoding
-  train_model.py        Training, validation threshold selection, evaluation
-  predict.py            Reusable prediction interface
-models/                 Generated model and metadata artifacts
+  data_preprocessing.py Shared feature preprocessing
+  train_model.py        Model training and holdout evaluation
+  predict.py            Shared inference interface
+models/                 Generated model artifacts
 tests/                  Unit tests
-data/                   Local Telco CSV (not committed)
-.github/workflows/      CI checks
-.streamlit/config.toml  Streamlit theme and server defaults
+.github/workflows/      CI
+render.yaml             Render API service blueprint
 ```
 
-## Run locally
+## 1. Install and train locally
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+Use Python 3.11.
 
-   ```bash
-   python -m pip install -r requirements.txt
-   ```
+```bash
+python -m venv .venv
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# macOS/Linux:
+# source .venv/bin/activate
 
-3. Place the IBM Telco Customer Churn CSV at:
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-   ```text
-   data/WA_Fn-UseC_-Telco-Customer-Churn.csv
-   ```
+Download the IBM Telco Customer Churn CSV and place it at:
 
-4. Train the model and generate artifacts:
+```text
+data/WA_Fn-UseC_-Telco-Customer-Churn.csv
+```
 
-   ```bash
-   python src/train_model.py
-   ```
+Train and generate model artifacts:
 
-5. Launch Streamlit:
+```bash
+python src/train_model.py
+```
 
-   ```bash
-   streamlit run app/app.py
-   ```
+Artifacts are written under `models/`. CI does not fabricate model artifacts. Keep artifacts from trusted training runs only.
 
-## Training and evaluation
+## 2. Run the Streamlit dashboard
 
-The training script uses stratified train/validation/test splits. The decision threshold is selected on the validation split by maximizing F2 score, then the model is refit on train + validation and evaluated once on the untouched test split. Metrics and the selected threshold are written to `models/metrics.json` and `models/threshold.json`.
+```bash
+streamlit run app/app.py
+```
 
-The model artifacts are generated locally and are intentionally not committed. Retrain after changing dependencies or preprocessing logic.
+The dashboard can run local inference when model artifacts exist. For hybrid mode, configure `CHURN_API_URL` and `CHURN_API_TOKEN` so predictions are sent to FastAPI.
+
+## 3. Run the FastAPI backend locally
+
+SQLite is used automatically for local development:
+
+```bash
+uvicorn backend.main:app --reload
+```
+
+- Health check: `http://127.0.0.1:8000/health`
+- Interactive API docs: `http://127.0.0.1:8000/docs`
+- Create prediction: `POST /v1/predictions`
+- List recent predictions: `GET /v1/predictions?limit=50`
+
+The service creates the prediction-history table on startup. In production, set `APP_ENV=production`, configure a strong `CHURN_API_TOKEN`, and provide a PostgreSQL `DATABASE_URL`. Protected API routes require `Authorization: Bearer <CHURN_API_TOKEN>`.
+
+## 4. Deployment
+
+### Streamlit Community Cloud
+
+1. Deploy this repository from Streamlit Community Cloud.
+2. Set the main file path to `app/app.py`.
+3. Add these values under App settings → Secrets:
+
+```toml
+CHURN_API_URL = "https://YOUR-API-SERVICE.onrender.com"
+CHURN_API_TOKEN = "the-same-generated-token-configured-on-the-api"
+```
+
+Do not commit actual secrets. If the API is not configured, the dashboard can use local model artifacts as a fallback.
+
+### Render API
+
+1. Create a PostgreSQL database on Render and copy its internal connection URL.
+2. Create a Blueprint deployment using `render.yaml`.
+3. Set `DATABASE_URL` to the PostgreSQL URL in the API service environment.
+4. Keep the generated `CHURN_API_TOKEN` secret private and copy it to Streamlit Cloud secrets.
+5. Ensure the API has trusted model artifacts available at `models/churn_model.pkl`, `models/columns.pkl`, and `models/threshold.json`. The Blueprint does not train a model automatically.
+
+The API health endpoint is `/health`. The service is not ready for predictions until model artifacts are provisioned.
 
 ## Tests
 
-Run:
-
 ```bash
 python -m unittest discover -s tests -v
+python -m compileall -q app src backend tests
 ```
 
-GitHub Actions runs Python compilation and the unit test suite for pushes and pull requests.
+GitHub Actions runs compilation and unit tests on pushes to main/upgrade branches and pull requests.
 
-## Important limitations
+## Security and operational notes
 
-- This is a portfolio/demo project, not a validated production retention decision system. Evaluate performance on representative, current business data before operational use.
-- The public Telco dataset is historical and may not represent current customer populations.
-- Model feature importance is global association, not causal explanation. Risk-factor heuristics shown in the interface are illustrative and must not be interpreted as SHAP explanations.
-- The demo account store is local-file based and is not suitable for multi-user production deployment. Use a managed identity provider and secure database before exposing accounts to real users.
-- Do not upload customer-identifiable or confidential data to a public deployment.
-- Scikit-learn/joblib artifacts should only be loaded from trusted sources.
+- The API token is service-to-service protection, not end-user identity or role-based access control.
+- The existing Streamlit local-file account system is still demo-only. Do not use it for real customer accounts or multi-instance deployments.
+- Use PostgreSQL, TLS, managed identity, secrets management, backups, and migrations before handling real customer information.
+- The public IBM Telco dataset is historical. Evaluate model quality and drift on representative current data before operational retention decisions.
+- Gini feature importance is a global model statistic, not a causal or individual-level explanation. The dashboard's manually defined risk-factor list is illustrative.
+- Only load model artifacts from trusted sources.
 
 ## Author
 
