@@ -6,11 +6,25 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
+import requests
 import streamlit as st
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.data_preprocessing import preprocess_input
+
+def setting(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        return str(st.secrets.get(name, default))
+    except Exception:
+        return default
+
+
+API_URL = setting("CHURN_API_URL").rstrip("/")
+API_TOKEN = setting("CHURN_API_TOKEN")
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = APP_ROOT / "models" / "churn_model.pkl"
@@ -298,9 +312,15 @@ def save_users(users: dict) -> None:
 
 
 def model_probability(customer_data: dict) -> tuple[int, float, pd.DataFrame]:
-    if model is None:
-        raise RuntimeError(ARTIFACT_ERROR or "Model artifacts are unavailable.")
     input_df = pd.DataFrame([customer_data])
+    if API_URL:
+        headers = {"Authorization": "Bearer " + API_TOKEN} if API_TOKEN else {}
+        response = requests.post(API_URL + "/v1/predictions", json=customer_data, headers=headers, timeout=20)
+        response.raise_for_status()
+        result = response.json()
+        return int(result["prediction"]), float(result["probability"]), input_df
+    if model is None:
+        raise RuntimeError(ARTIFACT_ERROR or "Model artifacts are unavailable. Configure CHURN_API_URL or train a local model.")
     processed_df = preprocess_input(input_df, columns)
     probability = float(model.predict_proba(processed_df)[0][1])
     prediction = int(probability >= THRESHOLD)
@@ -415,9 +435,9 @@ def render_prediction_page():
     if not st.session_state.authenticated:
         st.warning("Please login or create an account from the sidebar before running a prediction.")
         return
-    if model is None:
+    if model is None and not API_URL:
         st.error(ARTIFACT_ERROR or "Model artifacts are unavailable.")
-        st.info("For Streamlit Cloud, train the model locally and include the generated artifacts, or configure CHURN_API_URL for remote inference.")
+        st.info("Configure CHURN_API_URL and CHURN_API_TOKEN in Streamlit secrets, or train a local model.")
         return
 
     left, right = st.columns([1.05, 1], gap="large")
