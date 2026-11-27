@@ -78,7 +78,27 @@ st.markdown(
         --cyan: #0ea5e9;
     }
 
-    .stApp { background: var(--bg); color: var(--text); }
+    .stApp { background: #0b1220; color: #e5e7eb; }
+    .block-container { max-width: 1440px; padding-top: 2rem; padding-bottom: 3rem; }
+    [data-testid="stSidebar"] { background: #101a2d; border-right: 1px solid #26344d; }
+    [data-testid="stSidebar"] .block-container { padding-top: 1.5rem; }
+    .hero { padding: 1.5rem 0 1.1rem; margin-bottom: 1rem; }
+    .hero h1 { font-size: clamp(2rem, 3vw, 2.8rem); letter-spacing: -.04em; margin: .3rem 0; }
+    .hero p { color: #9fb0c8; font-size: 1.05rem; margin: 0; }
+    .eyebrow { color: #8b9cff; font-size: .72rem; font-weight: 800; letter-spacing: .14em; }
+    .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin: 1.3rem 0 .65rem; }
+    .section-heading h3 { margin: .2rem 0 0; font-size: 1.25rem; }
+    .section-hint { color: #8fa1bb; font-size: .82rem; }
+    [data-testid="stVerticalBlockBorderWrapper"] { background: rgba(20,31,51,.72); border: 1px solid #293953; border-radius: 16px; padding: 1rem 1.15rem; }
+    div[data-baseweb="input"], div[data-baseweb="select"] > div { border-radius: 10px !important; min-height: 2.8rem; }
+    div.stButton > button { border-radius: 10px; min-height: 3rem; font-weight: 750; }
+    div.stButton > button[kind="primary"] { background: linear-gradient(110deg,#6366f1,#8b5cf6); border: 0; }
+    .metric-card { background: #121e33; border: 1px solid #293953; border-radius: 14px; padding: 1rem; min-height: 6.8rem; }
+    .metric-label { font-size: .82rem; margin-bottom: .55rem; }
+    .metric-value { font-size: 1.2rem; margin-top: .4rem; }
+    .prob-panel, .content-card { background: #121e33; border: 1px solid #293953; border-radius: 14px; }
+    .result-banner { border-radius: 14px; }
+    @media (max-width: 900px) { .block-container { padding-left: 1rem; padding-right: 1rem; } .section-heading { align-items: start; flex-direction: column; } .section-hint { display: none; } }
     [data-testid="stSidebar"] { background: #1d293b; border-right: 1px solid #24324a; }
     [data-testid="stSidebar"] > div:first-child { padding-top: 1rem; }
     [data-testid="stHeader"] { background: transparent; }
@@ -435,130 +455,108 @@ def render_feature_importance():
 
 
 def render_prediction_page():
-    st.markdown('<div class="page-title">Customer Churn Prediction System</div>', unsafe_allow_html=True)
-    st.markdown('<div class="page-subtitle">Enter customer details to predict churn probability</div>', unsafe_allow_html=True)
-
+    st.markdown('<div class="hero"><div class="eyebrow">CUSTOMER INTELLIGENCE / CHURN ANALYTICS</div><h1>Customer risk workspace</h1><p>Build a customer profile and estimate their likelihood to churn.</p></div>', unsafe_allow_html=True)
     if not st.session_state.authenticated:
-        st.warning("Please login or create an account from the sidebar before running a prediction.")
+        st.warning("Sign in from the sidebar to run and save predictions.")
         return
     if model is None and not API_URL:
         st.error(ARTIFACT_ERROR or "Model artifacts are unavailable.")
-        st.info("Configure CHURN_API_URL and CHURN_API_TOKEN in Streamlit secrets, or train a local model.")
+        st.info("Configure the inference API or train a local model.")
         return
-
-    left, right = st.columns([1.05, 1], gap="large")
-
-    with left:
-        tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=24, step=1)
-        monthly_charges = st.number_input("Monthly Charges ($)", min_value=0.0, max_value=200.0, value=65.50, step=0.5, format="%.2f")
-        suggested_total = round(float(tenure) * float(monthly_charges), 2)
-        total_charges = st.number_input("Total Charges ($)", min_value=0.0, max_value=10000.0, value=suggested_total, step=10.0, format="%.2f")
-        contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-        internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
-        payment_method = st.selectbox(
-            "Payment Method",
-            ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"],
-        )
-
-    with right:
-        st.write("")
-        senior_citizen = st.checkbox("Senior Citizen", value=False)
-        partner = st.checkbox("Partner", value=True)
-        dependents = st.checkbox("Dependents", value=False)
-        phone_service = st.checkbox("Phone Service", value=True)
-        online_security = st.checkbox("Online Security", value=False, disabled=internet_service == "No")
-        tech_support = st.checkbox("Tech Support", value=True, disabled=internet_service == "No")
-        streaming_tv = st.checkbox("Streaming TV", value=True, disabled=internet_service == "No")
-        paperless_billing = st.checkbox("Paperless Billing", value=True)
-
+    st.markdown('<div class="section-heading"><div><span class="eyebrow">STEP 01</span><h3>Customer profile</h3></div><span class="section-hint">Customer and billing information</span></div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        primary, billing = st.columns(2, gap="large")
+        with primary:
+            st.markdown("**Account tenure & charges**")
+            tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=24, step=1)
+            monthly_charges = st.number_input("Monthly charges ($)", min_value=0.0, max_value=200.0, value=65.50, step=0.5, format="%.2f")
+            suggested_total = round(float(tenure) * float(monthly_charges), 2)
+            total_charges = st.number_input("Total charges ($)", min_value=0.0, max_value=10000.0, value=suggested_total, step=10.0, format="%.2f")
+        with billing:
+            st.markdown("**Contract & billing**")
+            contract = st.selectbox("Contract type", ["Month-to-month", "One year", "Two year"])
+            internet_service = st.selectbox("Internet service", ["Fiber optic", "DSL", "No"])
+            payment_method = st.selectbox("Payment method", ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"])
+    st.markdown('<div class="section-heading"><div><span class="eyebrow">STEP 02</span><h3>Services & customer attributes</h3></div><span class="section-hint">Select the services currently used</span></div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        profile_a, profile_b = st.columns(2, gap="large")
+        with profile_a:
+            st.markdown("**Customer attributes**")
+            senior_citizen = st.checkbox("Senior citizen", value=False)
+            partner = st.checkbox("Has a partner", value=True)
+            dependents = st.checkbox("Has dependents", value=False)
+            paperless_billing = st.checkbox("Paperless billing", value=True)
+        with profile_b:
+            st.markdown("**Subscribed services**")
+            phone_service = st.checkbox("Phone service", value=True)
+            online_security = st.checkbox("Online security", value=False, disabled=internet_service == "No")
+            tech_support = st.checkbox("Tech support", value=True, disabled=internet_service == "No")
+            streaming_tv = st.checkbox("Streaming TV", value=True, disabled=internet_service == "No")
     with st.expander("Advanced customer options", expanded=False):
         adv1, adv2, adv3 = st.columns(3)
         with adv1:
             gender = st.selectbox("Gender", ["Male", "Female"])
-            multiple_lines = st.selectbox("Multiple Lines", ["No", "Yes", "No phone service"] if phone_service else ["No phone service"])
+            multiple_lines = st.selectbox("Multiple lines", ["No", "Yes", "No phone service"] if phone_service else ["No phone service"])
         with adv2:
-            online_backup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"] if internet_service != "No" else ["No internet service"])
-            device_protection = st.selectbox("Device Protection", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
+            online_backup = st.selectbox("Online backup", ["Yes", "No", "No internet service"] if internet_service != "No" else ["No internet service"])
+            device_protection = st.selectbox("Device protection", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
         with adv3:
-            streaming_movies = st.selectbox("Streaming Movies", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
-
+            streaming_movies = st.selectbox("Streaming movies", ["No", "Yes", "No internet service"] if internet_service != "No" else ["No internet service"])
     customer_data = {
-        "gender": gender,
-        "SeniorCitizen": int(senior_citizen),
-        "Partner": yes_no(partner),
-        "Dependents": yes_no(dependents),
-        "tenure": int(tenure),
-        "PhoneService": yes_no(phone_service),
-        "MultipleLines": multiple_lines,
-        "InternetService": internet_service,
+        "gender": gender, "SeniorCitizen": int(senior_citizen), "Partner": yes_no(partner),
+        "Dependents": yes_no(dependents), "tenure": int(tenure), "PhoneService": yes_no(phone_service),
+        "MultipleLines": multiple_lines, "InternetService": internet_service,
         "OnlineSecurity": yes_no(online_security) if internet_service != "No" else "No internet service",
-        "OnlineBackup": online_backup,
-        "DeviceProtection": device_protection,
+        "OnlineBackup": online_backup, "DeviceProtection": device_protection,
         "TechSupport": yes_no(tech_support) if internet_service != "No" else "No internet service",
         "StreamingTV": yes_no(streaming_tv) if internet_service != "No" else "No internet service",
-        "StreamingMovies": streaming_movies,
-        "Contract": contract,
-        "PaperlessBilling": yes_no(paperless_billing),
-        "PaymentMethod": payment_method,
-        "MonthlyCharges": float(monthly_charges),
-        "TotalCharges": float(total_charges),
+        "StreamingMovies": streaming_movies, "Contract": contract,
+        "PaperlessBilling": yes_no(paperless_billing), "PaymentMethod": payment_method,
+        "MonthlyCharges": float(monthly_charges), "TotalCharges": float(total_charges),
     }
-
-    st.markdown('<div class="predict-button">', unsafe_allow_html=True)
-    submitted = st.button("🔮  Predict Churn Probability")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if not submitted:
-        st.caption("Prediction results will appear here after you submit the customer profile.")
+    action_col, helper_col = st.columns([1, 2], vertical_alignment="center")
+    with action_col:
+        submitted = st.button("⚡ Analyze churn risk", type="primary", use_container_width=True)
+    with helper_col:
+        st.caption("Avoid entering personal identifiers. Only customer attributes are needed.")
+    if submitted:
+        with st.spinner("Analyzing customer profile..."):
+            try:
+                prediction, probability, _ = model_probability(customer_data)
+                st.session_state["last_prediction"] = {"prediction": prediction, "probability": probability, "customer_data": customer_data}
+            except requests.RequestException as exc:
+                st.error("The prediction API could not be reached. Check its URL, service token and health.")
+                st.caption(str(exc))
+                return
+            except (ValueError, RuntimeError, KeyError) as exc:
+                st.error("Prediction could not be completed.")
+                st.caption(str(exc))
+                return
+    result = st.session_state.get("last_prediction")
+    if not result:
+        st.info("Your prediction summary will appear here after analysis.")
         return
-
-    try:
-        prediction, probability, _ = model_probability(customer_data)
-    except requests.RequestException as exc:
-        st.error("The prediction API could not be reached. Check CHURN_API_URL, CHURN_API_TOKEN, and backend health.")
-        st.caption(str(exc))
-        return
-    except (ValueError, RuntimeError) as exc:
-        st.error("Prediction could not be completed.")
-        st.caption(str(exc))
-        return
+    prediction, probability, customer_data = int(result["prediction"]), float(result["probability"]), result["customer_data"]
     churn = prediction == 1
-
+    st.markdown('<div class="section-heading"><div><span class="eyebrow">STEP 03</span><h3>Prediction insight</h3></div><span class="section-hint">Model output for this customer profile</span></div>', unsafe_allow_html=True)
     if churn:
-        st.markdown('<div class="page-title">Prediction Result</div>', unsafe_allow_html=True)
-        st.markdown('<div class="result-banner danger-banner">⚠️ &nbsp; Likely to Churn</div>', unsafe_allow_html=True)
+        st.error("HIGHER CHURN RISK · This profile is above the model decision threshold.")
     else:
-        st.markdown('<div class="page-title">Prediction Result — Not Likely to Churn</div>', unsafe_allow_html=True)
-        st.markdown('<div class="result-banner success-banner">✅ &nbsp; Not Likely to Churn</div>', unsafe_allow_html=True)
-
+        st.success("LOWER CHURN RISK · This profile is below the model decision threshold.")
     render_probability_panel(probability, churn)
-
+    cards = st.columns(4)
+    values = [("Prediction", "Likely to churn" if churn else "Not likely", "#ef4444" if churn else "#22c55e"), ("Probability", pct(probability), "#f97316" if churn else "#22c55e"), ("Decision threshold", f"{current_threshold():.2f}", "#818cf8"), ("Model", MODEL_NAME, "#38bdf8")]
+    for card, (label, value, color) in zip(cards, values):
+        with card:
+            render_metric_card(label, value, color)
     if churn:
-        cards = st.columns(4)
-        card_values = [
-            ("Prediction", "🚩 Churn", "#ef4444"),
-            ("Confidence", pct(probability), "#f97316"),
-            ("Threshold", f"{current_threshold():.2f}", "#818cf8"),
-            ("Model", MODEL_NAME, "#10b981"),
-        ]
-        for card, (label, value, color) in zip(cards, card_values):
-            with card:
-                render_metric_card(label, value, color)
-        st.markdown('<div class="risk-title">Top Churn Risk Factors Identified:</div>', unsafe_allow_html=True)
+        st.markdown("#### Suggested retention actions")
         factors = active_risk_factors(customer_data) or [("Model probability above churn threshold", int(probability * 100), "#ef4444")]
         render_bar_rows(factors)
-        st.markdown(
-            """
-            <div class="recommendation">
-                <h3>💡 Retention Recommendation:</h3>
-                <p>High-risk customer. Consider offering a loyalty discount, online security/support bundle, or a long-term contract upgrade.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.info("Review contract flexibility, service experience and support needs before offering a targeted retention incentive.")
     else:
-        render_feature_importance()
-
+        st.markdown("#### Customer profile summary")
+        st.caption("This profile is below the selected churn threshold. Continue monitoring customer experience and engagement.")
 
 def render_model_info_page():
     st.markdown('<div class="page-title">Model Info</div>', unsafe_allow_html=True)
@@ -785,10 +783,7 @@ def render_selected_page(page: str) -> None:
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-nav_column, content_column = st.columns([0.26, 0.74], gap="large")
-
-with nav_column:
+with st.sidebar:
     page = render_navigation_panel()
 
-with content_column:
-    render_selected_page(page)
+render_selected_page(page)
