@@ -585,6 +585,37 @@ def render_model_info_page():
     )
 
 
+def render_prediction_history_page():
+    st.markdown('<div class="page-title">Prediction History</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Recent predictions saved by the FastAPI service</div>', unsafe_allow_html=True)
+    if not API_URL:
+        st.info("Prediction history requires CHURN_API_URL and the FastAPI backend.")
+        return
+    headers = {"Authorization": "Bearer " + API_TOKEN} if API_TOKEN else {}
+    try:
+        response = requests.get(API_URL + "/v1/predictions?limit=100", headers=headers, timeout=20)
+        response.raise_for_status()
+        records = response.json()
+    except requests.RequestException as exc:
+        st.error("Could not load prediction history. Check API URL, token, and backend health.")
+        st.caption(str(exc))
+        return
+    if not records:
+        st.info("No predictions have been recorded yet.")
+        return
+    history = pd.DataFrame(records)
+    if "created_at" in history:
+        history["created_at"] = pd.to_datetime(history["created_at"], errors="coerce")
+    st.metric("Recorded predictions", len(history))
+    st.dataframe(
+        history[["id", "created_at", "label", "probability", "threshold", "model_name"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    csv = history.to_csv(index=False).encode("utf-8")
+    st.download_button("Download prediction history (CSV)", csv, "churn_prediction_history.csv", "text/csv")
+
+
 def render_documentation_page():
     st.markdown('<div class="page-title">Documentation</div>', unsafe_allow_html=True)
     st.markdown('<div class="page-subtitle">How to use, understand, and retrain the churn prediction system</div>', unsafe_allow_html=True)
@@ -714,7 +745,7 @@ def render_auth_page():
             st.success("You have been logged out.")
 
 
-NAV_ITEMS = ["📊 Prediction", "📈 Feature Importance", "🧠 Model Info", "📄 Documentation", "🔐 Login / Sign Up"]
+NAV_ITEMS = ["📊 Prediction", "🗂️ Prediction History", "📈 Feature Importance", "🧠 Model Info", "📄 Documentation", "🔐 Login / Sign Up"]
 
 
 def render_navigation_panel() -> str:
@@ -739,6 +770,8 @@ def render_selected_page(page: str) -> None:
     st.markdown('<div class="main-panel">', unsafe_allow_html=True)
     if page == "📊 Prediction":
         render_prediction_page()
+    elif page == "🗂️ Prediction History":
+        render_prediction_history_page()
     elif page == "📈 Feature Importance":
         st.markdown('<div class="page-title">Feature Importance</div>', unsafe_allow_html=True)
         st.markdown('<div class="page-subtitle">Global model drivers from the trained Random Forest</div>', unsafe_allow_html=True)
