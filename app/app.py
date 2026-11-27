@@ -277,6 +277,10 @@ def pct(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
+def current_threshold() -> float:
+    return float(st.session_state.get("active_threshold", THRESHOLD))
+
+
 def hash_password(password: str, salt: str | None = None) -> str:
     """Hash passwords with PBKDF2-HMAC-SHA256 and a per-user random salt."""
     import secrets
@@ -318,11 +322,13 @@ def model_probability(customer_data: dict) -> tuple[int, float, pd.DataFrame]:
         response = requests.post(API_URL + "/v1/predictions", json=customer_data, headers=headers, timeout=20)
         response.raise_for_status()
         result = response.json()
+        st.session_state["active_threshold"] = float(result["threshold"])
         return int(result["prediction"]), float(result["probability"]), input_df
     if model is None:
         raise RuntimeError(ARTIFACT_ERROR or "Model artifacts are unavailable. Configure CHURN_API_URL or train a local model.")
     processed_df = preprocess_input(input_df, columns)
     probability = float(model.predict_proba(processed_df)[0][1])
+    st.session_state["active_threshold"] = THRESHOLD
     prediction = int(probability >= THRESHOLD)
     return prediction, probability, processed_df
 
@@ -385,7 +391,7 @@ def render_probability_panel(probability: float, churn: bool):
                 <span class="prob-value" style="color:{color};">{pct(probability)}</span>
             </div>
             <div class="track"><div class="fill" style="width:{min(probability * 100, 100):.1f}%; background:{color};"></div></div>
-            <div class="threshold-note">Threshold: {THRESHOLD:.2f} &nbsp;|&nbsp; {note}</div>
+            <div class="threshold-note">Threshold: {current_threshold():.2f} &nbsp;|&nbsp; {note}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -532,7 +538,7 @@ def render_prediction_page():
         card_values = [
             ("Prediction", "🚩 Churn", "#ef4444"),
             ("Confidence", pct(probability), "#f97316"),
-            ("Threshold", f"{THRESHOLD:.2f}", "#818cf8"),
+            ("Threshold", f"{current_threshold():.2f}", "#818cf8"),
             ("Model", MODEL_NAME, "#10b981"),
         ]
         for card, (label, value, color) in zip(cards, card_values):
@@ -560,7 +566,7 @@ def render_model_info_page():
     cards = st.columns(4)
     values = [
         ("Model", MODEL_NAME, "#10b981"),
-        ("Threshold", f"{THRESHOLD:.2f}", "#818cf8"),
+        ("Threshold", f"{current_threshold():.2f}", "#818cf8"),
         ("Accuracy", MODEL_ACCURACY, "#38bdf8"),
         ("ROC AUC", MODEL_ROC_AUC, "#f59e0b"),
     ]
@@ -639,7 +645,7 @@ def render_documentation_page():
     with metric_col:
         render_metric_card("Model", MODEL_NAME, "#10b981")
     with threshold_col:
-        render_metric_card("Threshold", f"{THRESHOLD:.2f}", "#818cf8")
+        render_metric_card("Threshold", f"{current_threshold():.2f}", "#818cf8")
     with retrain_col:
         render_metric_card("ROC AUC", MODEL_ROC_AUC, "#f59e0b")
 
@@ -722,7 +728,7 @@ def render_navigation_panel() -> str:
         index=default_index,
     )
     st.markdown(
-        f'<div class="sidebar-status">Model: {MODEL_NAME}<br><strong>Threshold: {THRESHOLD:.2f}</strong></div>',
+        f'<div class="sidebar-status">Model: {MODEL_NAME}<br><strong>Threshold: {current_threshold():.2f}</strong></div>',
         unsafe_allow_html=True,
     )
     st.markdown('<div class="side-note">Use the menu above to move between prediction, model details, docs, and account pages.</div>', unsafe_allow_html=True)
