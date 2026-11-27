@@ -752,7 +752,7 @@ def render_navigation_panel() -> str:
     st.markdown('<div class="brand-card">⚡ CCPS</div>', unsafe_allow_html=True)
     status = f"Logged in as <strong>{st.session_state.username}</strong>" if st.session_state.authenticated else "Not logged in"
     st.markdown(f'<div class="login-status">{status}</div>', unsafe_allow_html=True)
-    default_index = 0 if st.session_state.authenticated else 4
+    default_index = 0 if st.session_state.authenticated else 5
     selected_page = st.radio(
         "Navigation",
         NAV_ITEMS,
