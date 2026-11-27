@@ -34,13 +34,18 @@ st.set_page_config(
 
 @st.cache_resource
 def load_artifacts():
-    """Load the trained model and expected feature columns once per session."""
-    model = joblib.load(MODEL_PATH)
-    columns = joblib.load(COLUMNS_PATH)
-    return model, columns
+    """Load trusted local model artifacts once per Streamlit process."""
+    if not MODEL_PATH.exists() or not COLUMNS_PATH.exists():
+        raise FileNotFoundError("Model artifacts are missing. Train with: python src/train_model.py")
+    return joblib.load(MODEL_PATH), joblib.load(COLUMNS_PATH)
 
 
-model, columns = load_artifacts()
+try:
+    model, columns = load_artifacts()
+    ARTIFACT_ERROR = None
+except FileNotFoundError as exc:
+    model, columns = None, []
+    ARTIFACT_ERROR = str(exc)
 
 st.markdown(
     """
@@ -258,8 +263,28 @@ def pct(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+def hash_password(password: str, salt: str | None = None) -> str:
+    """Hash passwords with PBKDF2-HMAC-SHA256 and a per-user random salt."""
+    import secrets
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), 310_000)
+    return "pbkdf2_sha256$" + salt + "$" + digest.hex()
+
+
+def verify_password(password: str, stored: str) -> tuple[bool, str | None]:
+    """Verify PBKDF2 hashes and upgrade legacy SHA-256 hashes at next login."""
+    import hmac
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, salt, expected = stored.split("$", 2)
+            candidate = hash_password(password, salt)
+            return hmac.compare_digest(candidate, stored), None
+        except (ValueError, TypeError):
+            return False, None
+    legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if hmac.compare_digest(legacy, stored):
+        return True, hash_password(password)
+    return False, None
 
 
 def load_users() -> dict:
@@ -273,6 +298,8 @@ def save_users(users: dict) -> None:
 
 
 def model_probability(customer_data: dict) -> tuple[int, float, pd.DataFrame]:
+    if model is None:
+        raise RuntimeError(ARTIFACT_ERROR or "Model artifacts are unavailable.")
     input_df = pd.DataFrame([customer_data])
     processed_df = preprocess_input(input_df, columns)
     probability = float(model.predict_proba(processed_df)[0][1])
@@ -281,6 +308,8 @@ def model_probability(customer_data: dict) -> tuple[int, float, pd.DataFrame]:
 
 
 def aggregate_feature_importance() -> list[tuple[str, float]]:
+    if model is None or not hasattr(model, "feature_importances_"):
+        return []
     names = {
         "tenure": "Tenure",
         "MonthlyCharges": "Monthly Charges",
@@ -366,6 +395,9 @@ def render_metric_card(label: str, value: str, color: str):
 
 def render_feature_importance():
     st.markdown('<div class="section-title">📈 Feature Importance (Random Forest — Gini Impurity Reduction)</div>', unsafe_allow_html=True)
+    if model is None:
+        st.warning(ARTIFACT_ERROR or "Model artifacts are unavailable. Train the model first.")
+        return
     palette = ["#6366f1", "#8b5cf6", "#a78bfa", "#0ea5e9", "#38bdf8", "#10b981", "#34d399", "#6ee7b7"]
     top = aggregate_feature_importance()[:8]
     max_value = top[0][1] if top else 1
@@ -382,6 +414,10 @@ def render_prediction_page():
 
     if not st.session_state.authenticated:
         st.warning("Please login or create an account from the sidebar before running a prediction.")
+        return
+    if model is None:
+        st.error(ARTIFACT_ERROR or "Model artifacts are unavailable.")
+        st.info("For Streamlit Cloud, train the model locally and include the generated artifacts, or configure CHURN_API_URL for remote inference.")
         return
 
     left, right = st.columns([1.05, 1], gap="large")
@@ -604,7 +640,11 @@ def render_auth_page():
         password = st.text_input("Password", type="password", key="login_password")
         if st.button("Login", key="login_button"):
             users = load_users()
-            if username in users and users[username] == hash_password(password):
+            valid, upgraded_hash = verify_password(password, users.get(username, ""))
+            if username in users and valid:
+                if upgraded_hash:
+                    users[username] = upgraded_hash
+                    save_users(users)
                 st.session_state.authenticated = True
                 st.session_state.username = username
                 st.success(f"Welcome back, {username}!")
