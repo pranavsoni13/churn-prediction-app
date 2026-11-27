@@ -21,3 +21,8 @@ Thumbs.db
 # Data (optional if large)
 data/
 .streamlit_users.json
+# Local database and secrets
+*.db
+.env
+.env.*
+!.env.example
