@@ -16,10 +16,13 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = APP_ROOT / "models" / "churn_model.pkl"
 COLUMNS_PATH = APP_ROOT / "models" / "columns.pkl"
 USER_STORE_PATH = APP_ROOT / ".streamlit_users.json"
-THRESHOLD = 0.30
+THRESHOLD = float(json.loads((APP_ROOT / 'models' / 'threshold.json').read_text(encoding='utf-8')).get('threshold', 0.30)) if (APP_ROOT / 'models' / 'threshold.json').exists() else 0.30
 MODEL_NAME = "Random Forest"
-MODEL_ACCURACY = "77.1%"
-MODEL_ROC_AUC = "83.5%"
+METRICS_PATH = APP_ROOT / 'models' / 'metrics.json'
+METRICS = json.loads(METRICS_PATH.read_text(encoding='utf-8')) if METRICS_PATH.exists() else {}
+
+MODEL_ACCURACY = f"{METRICS.get('accuracy', 0):.1%}" if METRICS else "Not trained"
+MODEL_ROC_AUC = f"{METRICS.get('roc_auc', 0):.1%}" if METRICS else "Not trained"
 
 st.set_page_config(
     page_title="Customer Churn Prediction System",
