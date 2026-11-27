@@ -506,7 +506,16 @@ def render_prediction_page():
         st.caption("Prediction results will appear here after you submit the customer profile.")
         return
 
-    prediction, probability, _ = model_probability(customer_data)
+    try:
+        prediction, probability, _ = model_probability(customer_data)
+    except requests.RequestException as exc:
+        st.error("The prediction API could not be reached. Check CHURN_API_URL, CHURN_API_TOKEN, and backend health.")
+        st.caption(str(exc))
+        return
+    except (ValueError, RuntimeError) as exc:
+        st.error("Prediction could not be completed.")
+        st.caption(str(exc))
+        return
     churn = prediction == 1
 
     if churn:
